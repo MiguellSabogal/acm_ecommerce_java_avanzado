@@ -20,6 +20,7 @@ repositories {
 ext {
 	set('springCloudVersion', "2025.1.1")
 	set('spring-framework.version', "7.0.9")   // parche CVE-2026-47884 / CVE-2026-47890
+	set('tomcat.version', "11.0.25")            // parche CVE-2026-65182 / 65905 / 68525
 }
 
 dependencies {
@@ -49,6 +50,12 @@ dependencies {
 dependencyManagement {
 	imports {
 		mavenBom "org.springframework.cloud:spring-cloud-dependencies:${springCloudVersion}"
+	}
+	// Bouncy Castle 1.81 llega como dependencia transitiva; se fija 1.85 (CVE-2025-14813, CVE-2026-8763)
+	dependencies {
+		dependency 'org.bouncycastle:bcprov-jdk18on:1.85'
+		dependency 'org.bouncycastle:bcpkix-jdk18on:1.85'
+		dependency 'org.bouncycastle:bcutil-jdk18on:1.85'
 	}
 }
 
