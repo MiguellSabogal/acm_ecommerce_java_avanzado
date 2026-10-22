@@ -19,6 +19,7 @@ repositories {
 
 ext {
 	set('springCloudVersion', "2025.1.1")
+	set('spring-framework.version', "7.0.9")   // parche CVE-2026-47884 / CVE-2026-47890
 }
 
 dependencies {
