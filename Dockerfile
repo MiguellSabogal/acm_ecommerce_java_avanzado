@@ -1,4 +1,5 @@
-FROM eclipse-temurin:21-jre-alpine
+# Java 25: debe coincidir con el toolchain de build.gradle (bytecode v69)
+FROM eclipse-temurin:25-jre-alpine
 RUN addgroup -S spring && adduser -S spring -G spring
 USER spring:spring
 WORKDIR /app
