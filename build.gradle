@@ -1,6 +1,6 @@
 plugins {
 	id 'java'
-	id 'org.springframework.boot' version '4.0.5'
+	id 'org.springframework.boot' version '4.0.8'   // 4.0.5 → 4.0.8: CVE-2026-40976
 	id 'io.spring.dependency-management' version '1.1.7'
 }
 
@@ -49,6 +49,15 @@ dependencies {
 dependencyManagement {
 	imports {
 		mavenBom "org.springframework.cloud:spring-cloud-dependencies:${springCloudVersion}"
+	}
+}
+
+// Bouncy Castle *-jdk15on está descontinuado (última versión 1.70) y tiene CVE-2026-8763.
+// Se reemplaza por la línea mantenida *-jdk18on 1.85, que corrige la vulnerabilidad.
+configurations.configureEach {
+	resolutionStrategy.dependencySubstitution {
+		substitute module('org.bouncycastle:bcprov-jdk15on') using module('org.bouncycastle:bcprov-jdk18on:1.85') because 'CVE-2026-8763'
+		substitute module('org.bouncycastle:bcpkix-jdk15on') using module('org.bouncycastle:bcpkix-jdk18on:1.85') because 'CVE-2026-8763'
 	}
 }
 
