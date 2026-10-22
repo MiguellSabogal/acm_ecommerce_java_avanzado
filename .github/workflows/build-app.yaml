@@ -1,0 +1,319 @@
+# =============================================================================
+#  CI · acm_ecommerce_java_avanzado
+#
+#   ┌─────────┐     ┌─────────┐     ┌──────────────┐     ┌──────────────┐
+#   │  build  │ ──▶ │  test   │ ──▶ │  image-scan  │ ──▶ │    docker    │
+#   └─────────┘  ┐  └─────────┘  ┌▶ │   (Trivy)    │     │ (GHCR push)  │
+#                └▶ ┌─────────┐ ─┘  └──────────────┘     └──────────────┘
+#                   │ codeql  │
+#                   └─────────┘
+#
+#  Extras elegidos para la evaluación:
+#    ✔ Seguridad integrada   → CodeQL (SAST) + Trivy (escaneo de la imagen)
+#    ✔ Etiquetado semántico  → latest · vX.Y.Z · sha-<short> · pr-N
+# =============================================================================
+name: CI · Build, Test & Publish
+
+on:
+  pull_request:
+    branches: [main, master]
+  # Publicar una versión: git tag v1.0.3 && git push origin v1.0.3
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+
+# Cancela ejecuciones anteriores del mismo PR / rama
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+# Mínimo privilegio por defecto; cada job pide solo lo que necesita
+permissions:
+  contents: read
+
+env:
+  JAVA_VERSION: '25'           # build.gradle → toolchain languageVersion = 25
+  JAVA_DISTRIBUTION: temurin
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 1 · BUILD — compila y empaqueta el JAR ejecutable
+  # ---------------------------------------------------------------------------
+  build:
+    name: 🔨 Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: gradle                 # caché de dependencias de Gradle
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x ./gradlew
+
+      - name: Compile & package (bootJar)
+        run: ./gradlew bootJar --no-daemon
+
+      - name: Read project version
+        id: version
+        run: |
+          RAW=$(./gradlew properties -q --no-daemon | awk '/^version:/ {print $2}')
+          VERSION=${RAW%-SNAPSHOT}
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "📦 Versión del proyecto: \`$RAW\` → etiqueta \`v$VERSION\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-jar
+          path: build/libs/*.jar
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # 2 · TEST — pruebas con PostgreSQL real; credenciales desde GitHub Secrets
+  # ---------------------------------------------------------------------------
+  test:
+    name: 🧪 Test
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      checks: write                    # reporte JUnit en la pestaña Checks
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: ${{ secrets.DB_NAME }}
+          POSTGRES_USER: ${{ secrets.DB_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.DB_PASSWORD }}
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: gradle
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x ./gradlew
+
+      - name: Run tests
+        env:
+          SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/${{ secrets.DB_NAME }}
+          SPRING_DATASOURCE_USERNAME: ${{ secrets.DB_USER }}
+          SPRING_DATASOURCE_PASSWORD: ${{ secrets.DB_PASSWORD }}
+        run: ./gradlew test --no-daemon
+
+      - name: Publish test report
+        if: always()
+        uses: mikepenz/action-junit-report@v5
+        with:
+          report_paths: build/test-results/test/*.xml
+          detailed_summary: true
+          include_passed: true
+
+      - name: Upload HTML test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report
+          path: build/reports/tests/test/
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # 3 · CODEQL — SAST: vulnerabilidades en el código Java (corre en paralelo
+  #     con test)
+  # ---------------------------------------------------------------------------
+  codeql:
+    name: 🛡️ CodeQL (SAST)
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      security-events: write           # subir resultados a Code scanning
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: java-kotlin
+          build-mode: none             # extracción sin compilar (no depende del JDK)
+          queries: security-extended
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: /language:java-kotlin
+
+  # ---------------------------------------------------------------------------
+  # 4 · IMAGE SCAN — construye la imagen y la escanea con Trivy ANTES de
+  #     publicarla. Si hay CVEs CRITICAL con parche disponible → falla.
+  # ---------------------------------------------------------------------------
+  image-scan:
+    name: 🔍 Trivy image scan
+    needs: [test, codeql]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download JAR
+        uses: actions/download-artifact@v4
+        with:
+          name: app-jar
+          path: build/libs
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image (local, sin publicar)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          push: false
+          tags: app:scan
+          cache-from: type=gha
+          cache-to: type=gha,mode=max   # el job docker reutiliza estas capas
+
+      # trivy-action 0.35.0 + binario v0.69.3: versiones verificadas tras el
+      # incidente de supply-chain de marzo 2026 (CVE-2026-33634)
+      - name: Trivy · reporte en el log
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          version: v0.69.3
+          image-ref: app:scan
+          format: table
+          severity: CRITICAL,HIGH,MEDIUM
+          exit-code: '0'
+
+      - name: Trivy · SARIF para Code scanning
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          version: v0.69.3
+          image-ref: app:scan
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH
+          skip-setup-trivy: true
+
+      - name: Upload Trivy SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: trivy-results.sarif
+          category: trivy-image
+
+      - name: Trivy · quality gate (CRITICAL con fix)
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          version: v0.69.3
+          image-ref: app:scan
+          format: table
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+          skip-setup-trivy: true
+
+  # ---------------------------------------------------------------------------
+  # 5 · DOCKER — construye y publica en GHCR con etiquetado semántico
+  # ---------------------------------------------------------------------------
+  docker:
+    name: 🐳 Publish to GHCR
+    needs: [build, image-scan]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write                  # push a ghcr.io
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download JAR
+        uses: actions/download-artifact@v4
+        with:
+          name: app-jar
+          path: build/libs
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata (semantic tags)
+        id: meta
+        uses: docker/metadata-action@v5
+        env:
+          DOCKER_METADATA_PR_HEAD_SHA: 'true'   # short-SHA del commit real del PR
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest
+            type=raw,value=v${{ needs.build.outputs.version }}
+            type=sha,format=short,prefix=sha-
+            type=ref,event=pr
+            type=semver,pattern=v{{version}}
+            type=semver,pattern=v{{major}}.{{minor}}
+          labels: |
+            org.opencontainers.image.title=acm-ecommerce
+            org.opencontainers.image.description=ACM e-commerce API (Spring Boot)
+
+      - name: Build & push
+        id: push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          provenance: true
+          sbom: true
+
+      - name: Summary
+        run: |
+          {
+            echo "## 🐳 Imagen publicada"
+            echo ""
+            echo "| Etiqueta |"
+            echo "|---|"
+            echo '${{ steps.meta.outputs.tags }}' | sed 's/^/| `/; s/$/` |/'
+            echo ""
+            echo "**Digest:** \`${{ steps.push.outputs.digest }}\`"
+            echo ""
+            echo "Rollback: \`docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-<commit>\`"
+          } >> "$GITHUB_STEP_SUMMARY"
