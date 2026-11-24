@@ -5,7 +5,7 @@ plugins {
 }
 
 group = 'com.acm'
-version = '0.0.1-SNAPSHOT'
+version = '1.0.0'
 
 java {
 	toolchain {
@@ -66,6 +66,11 @@ configurations.configureEach {
 		substitute module('org.bouncycastle:bcprov-jdk15on') using module('org.bouncycastle:bcprov-jdk18on:1.85') because 'CVE-2026-8763'
 		substitute module('org.bouncycastle:bcpkix-jdk15on') using module('org.bouncycastle:bcpkix-jdk18on:1.85') because 'CVE-2026-8763'
 	}
+}
+
+// Solo el JAR ejecutable (bootJar): evita que el Dockerfile copie dos JAR
+tasks.named('jar') {
+	enabled = false
 }
 
 tasks.named('test') {

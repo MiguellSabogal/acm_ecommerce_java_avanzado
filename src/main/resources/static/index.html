@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ACM E-commerce</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+  /* ============================================================
+     DEMO EN VIVO · cambio visible #2 (opcional):
+     cambia --accent por otro color, p. ej. #2b6cff o #12a150
+     ============================================================ */
+  :root {
+    --accent: #ff5a36;
+    --bg: #f6f4f1;
+    --surface: #ffffff;
+    --ink: #17161a;
+    --muted: #6d6873;
+    --line: #e4e0db;
+    --ok: #12a150;
+    --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+    --body: "Figtree", "Segoe UI", system-ui, sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#121115; --surface:#1b1a20; --ink:#f1eef2; --muted:#a39dab; --line:#2c2a33; --ok:#3fd07f; color-scheme: dark; }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 400 16px/1.55 var(--body);
+    padding: 40px max(16px, env(safe-area-inset-left)) 56px;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; display: flex; flex-direction: column; gap: 28px; }
+  header { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .brand { display: flex; align-items: center; gap: 10px; font: 800 18px/1 var(--display); letter-spacing: -.01em; }
+  .logo { width: 30px; height: 30px; border-radius: 8px; background: var(--accent); display: grid; place-items: center; }
+  .logo svg { width: 18px; height: 18px; }
+  .live {
+    display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px; border-radius: 999px;
+    background: var(--surface); border: 1px solid var(--line); font: 500 13px/1 var(--mono); color: var(--muted);
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .live.on .dot { background: var(--ok); box-shadow: 0 0 0 4px color-mix(in srgb, var(--ok) 20%, transparent); }
+  .live.on { color: var(--ink); }
+
+  .hero { display: flex; flex-direction: column; gap: 14px; padding-block: 24px 8px; }
+  .eyebrow { font: 500 13px/1 var(--mono); color: var(--accent); letter-spacing: .06em; text-transform: uppercase; }
+  h1 {
+    margin: 0; font: 800 clamp(40px, 8vw, 84px)/.95 var(--display); letter-spacing: -.035em;
+    text-wrap: balance; max-width: 14ch;
+  }
+  h1 em { font-style: normal; color: var(--accent); }
+  .lede { margin: 0; font-size: 18px; color: var(--muted); max-width: 58ch; }
+
+  .grid { display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 14px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 20px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .card .k { font: 500 12px/1 var(--mono); text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
+  .card .v { font: 800 34px/1.05 var(--display); letter-spacing: -.02em; overflow-wrap: anywhere; }
+  .card .s { font-size: 13.5px; color: var(--muted); }
+  .card.version { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  .card.version .k, .card.version .s { color: color-mix(in srgb, var(--bg) 65%, transparent); }
+  .card.version .v { color: var(--bg); }
+  code.sha { font: 500 15px/1 var(--mono); background: color-mix(in srgb, var(--accent) 22%, transparent); color: inherit; padding: 4px 8px; border-radius: 6px; }
+
+  .flow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font: 500 13px/1 var(--mono); color: var(--muted); }
+  .flow span { padding: 8px 10px; border: 1px dashed var(--line); border-radius: 8px; background: var(--surface); }
+  .flow span:last-child { border-style: solid; border-color: var(--accent); color: var(--ink); }
+  .flow i { font-style: normal; opacity: .6; }
+
+  .links { display: flex; gap: 10px; flex-wrap: wrap; }
+  .links a {
+    text-decoration: none; color: var(--ink); font-weight: 600; font-size: 14.5px;
+    padding: 10px 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface);
+  }
+  .links a:hover { border-color: var(--accent); }
+  .links a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 16px; }
+  @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } body { padding-top: 24px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <span class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 7h12l-1.2 11.2a2 2 0 0 1-2 1.8H9.2a2 2 0 0 1-2-1.8L6 7z"/><path d="M9 7V6a3 3 0 0 1 6 0v1"/></svg></span>
+      ACM E-commerce
+    </div>
+    <span class="live" id="live"><span class="dot"></span><span id="live-text">conectando…</span></span>
+  </header>
+
+  <section class="hero">
+    <span class="eyebrow">Producción · desplegado con CI/CD</span>
+    <!-- ==========================================================
+         DEMO EN VIVO · cambio visible #1:
+         edita este título, haz commit + push a main y espera el deploy
+         ========================================================== -->
+    <h1>Tu tienda, <em>siempre al día</em></h1>
+    <p class="lede">Cada <code>git push</code> a <code>main</code> compila, prueba, escanea y publica una imagen Docker nueva. Render la despliega sin intervención manual.</p>
+  </section>
+
+  <section class="grid" aria-label="Estado del despliegue">
+    <div class="card version">
+      <span class="k">Versión en producción</span>
+      <span class="v" id="version">—</span>
+      <span class="s">commit <code class="sha" id="commit">—</code></span>
+    </div>
+    <div class="card">
+      <span class="k">Productos en catálogo</span>
+      <span class="v" id="products">—</span>
+      <span class="s">desde PostgreSQL (Neon)</span>
+    </div>
+    <div class="card">
+      <span class="k">Instancia iniciada</span>
+      <span class="v" id="started">—</span>
+      <span class="s" id="started-date">hora local</span>
+    </div>
+  </section>
+
+  <div class="flow" aria-label="Ruta del cambio">
+    <span>git push</span><i>→</i><span>build</span><i>→</i><span>test</span><i>→</i><span>trivy</span><i>→</i><span>ghcr</span><i>→</i><span id="flow-end">render</span>
+  </div>
+
+  <nav class="links">
+    <a href="/api/v1/info">/api/v1/info</a>
+    <a href="/api/v1/products">/api/v1/products</a>
+    <a href="/api/v1/users">/api/v1/users</a>
+  </nav>
+
+  <footer>Universidad Distrital Francisco José de Caldas · Sustentación CI/CD</footer>
+</div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  async function load() {
+    try {
+      const info = await fetch('/api/v1/info', { cache: 'no-store' }).then(r => r.json());
+      $('version').textContent = 'v' + info.version;
+      $('commit').textContent = info.commit;
+      $('flow-end').textContent = 'render · ' + info.commit;
+      const d = new Date(info.startedAt);
+      $('started').textContent = d.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+      $('started-date').textContent = d.toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' });
+      $('live').classList.add('on');
+      $('live-text').textContent = 'en línea';
+    } catch (e) {
+      $('live-text').textContent = 'sin respuesta';
+    }
+    try {
+      const products = await fetch('/api/v1/products', { cache: 'no-store' }).then(r => r.json());
+      $('products').textContent = Array.isArray(products) ? products.length : '—';
+    } catch (e) {
+      $('products').textContent = '—';
+    }
+  }
+  load();
+</script>
+</body>
+</html>

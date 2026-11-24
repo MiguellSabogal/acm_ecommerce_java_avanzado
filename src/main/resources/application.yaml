@@ -1,3 +1,5 @@
+server:
+  port: ${PORT:8080}              # Render inyecta PORT; en local se usa 8080
 spring:
   application:
     name: ecommerce
@@ -13,6 +15,9 @@ spring:
     properties:
       hibernate:
         format_sql: true
+app:
+  version: ${APP_VERSION:dev}     # lo define el Dockerfile con la versión de build.gradle
+  commit: ${GIT_SHA:local}        # short-SHA del commit que generó la imagen
 springdoc:
   api-docs:
     path: /api/v1/api-docs
